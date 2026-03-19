@@ -1,0 +1,204 @@
+﻿<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>教室時鐘 - 專業七段顯示版</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Noto+Sans+TC:wght@300;400&display=swap" rel="stylesheet" />
+  <style>
+    /* ── 配色與變數 ── */
+    :root {
+      --bg: #0a0507;
+      --panel: #111827;
+      --border: #3a1c28;
+      --accent: #ffb7c5;
+      --segment-on: #d4ff5e;   /* 附件圖片的萊姆綠 */
+      --segment-off: #1a1a1a;  /* 未亮起的片段 */
+      --glow: 0 0 15px rgba(212, 255, 94, 0.5);
+      --text: #e2e8f0;
+      --dim: #a18a93;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans TC', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+
+    .container {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 20px; width: min(850px, 96vw);
+    }
+
+    /* ── 仿圖片：凹陷式時鐘外殼 ── */
+    .clock-case {
+      background: #0f1113;
+      padding: 30px 40px;
+      border-radius: 35px;
+      box-shadow: 
+        inset 8px 8px 16px #050505, 
+        inset -2px -2px 10px rgba(255,255,255,0.02),
+        15px 15px 35px rgba(0,0,0,0.8);
+      border: 1px solid #1a1a1a;
+      display: inline-flex;
+      gap: 12px; align-items: center;
+    }
+
+    /* ── 七段顯示器格柵 ── */
+    .digit {
+      width: clamp(40px, 10vw, 60px);
+      height: clamp(70px, 18vw, 100px);
+      display: grid;
+      grid-template-columns: 8px 1fr 8px;
+      grid-template-rows: 8px 1fr 8px 1fr 8px;
+      gap: 3px;
+    }
+
+    .seg { background: var(--segment-off); border-radius: 3px; transition: background 0.1s; }
+    .s-a { grid-column: 2; grid-row: 1; }
+    .s-b { grid-column: 3; grid-row: 2; }
+    .s-c { grid-column: 3; grid-row: 4; }
+    .s-d { grid-column: 2; grid-row: 5; }
+    .s-e { grid-column: 1; grid-row: 4; }
+    .s-f { grid-column: 1; grid-row: 2; }
+    .s-g { grid-column: 2; grid-row: 3; }
+
+    .digit .on { background: var(--segment-on); box-shadow: var(--glow); }
+
+    .colon-box { display: flex; flex-direction: column; gap: 20px; padding: 0 5px; }
+    .dot { 
+      width: 10px; height: 10px; background: var(--segment-on); 
+      border-radius: 50%; box-shadow: var(--glow); 
+      animation: blink 1s step-end infinite; 
+    }
+    @keyframes blink { 50% { opacity: 0.1; } }
+
+    /* ── 其他原本功能樣式 ── */
+    .date-line { font-family: 'Orbitron'; color: var(--accent); letter-spacing: 3px; }
+    .exam-panel { width: 100%; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .mode-switcher { display: flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .mode-btn { flex: 1; padding: 10px; background: transparent; color: var(--dim); border: none; cursor: pointer; font-family: 'Orbitron'; }
+    .mode-btn.active { background: rgba(255,183,197,0.1); color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<div id="canvas-container"><canvas id="sakura-canvas"></canvas></div>
+
+<div class="container">
+  <div class="date-line" id="dateLine"></div>
+  <div id="weekday" style="color:var(--dim); font-size: 0.9rem;"></div>
+
+  <div class="clock-case">
+    <div class="digit" id="h0"></div><div class="digit" id="h1"></div>
+    <div class="colon-box"><div class="dot"></div><div class="dot"></div></div>
+    <div class="digit" id="m0"></div><div class="digit" id="m1"></div>
+    <div class="colon-box"><div class="dot"></div><div class="dot"></div></div>
+    <div class="digit" id="s0"></div><div class="digit" id="s1"></div>
+  </div>
+
+  <div class="mode-switcher">
+    <button class="mode-btn active" id="btnMonthly">月　考</button>
+    <button class="mode-btn" id="btnMock">模擬考</button>
+  </div>
+
+  <div class="exam-panel">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span style="color:var(--accent);">考試倒數功能</span>
+      <input type="checkbox" id="examToggle">
+    </div>
+    <div id="countdownArea" style="display:none; margin-top:15px; text-align:center;">
+      <div id="cdLabel" style="font-size:0.8rem; color:var(--dim);">剩餘時間</div>
+      <div id="cdTime" style="font-family:'Orbitron'; font-size:3rem; color:var(--segment-on); text-shadow:var(--glow);">00:00</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── 七段數位映射表 ──
+  const segMap = [
+    [1,1,1,1,1,1,0], [0,1,1,0,0,0,0], [1,1,0,1,1,0,1], [1,1,1,1,0,0,1], [0,1,1,0,0,1,1],
+    [1,0,1,1,0,1,1], [1,0,1,1,1,1,1], [1,1,1,0,0,0,0], [1,1,1,1,1,1,1], [1,1,1,1,0,1,1]
+  ];
+  const classes = ['s-a','s-b','s-c','s-d','s-e','s-f','s-g'];
+
+  // 初始化數位格
+  function initDigits() {
+    ['h0','h1','m0','m1','s0','s1'].forEach(id => {
+      const el = document.getElementById(id);
+      classes.forEach(c => {
+        const d = document.createElement('div');
+        d.className = `seg ${c}`;
+        el.appendChild(d);
+      });
+    });
+  }
+
+  function drawDigit(id, val) {
+    const segs = document.getElementById(id).querySelectorAll('.seg');
+    const bits = segMap[parseInt(val)];
+    segs.forEach((s, i) => s.classList.toggle('on', bits[i] === 1));
+  }
+
+  // ── 櫻花動畫 (保持你原本的邏輯) ──
+  const canvas = document.getElementById('sakura-canvas');
+  const ctx = canvas.getContext('2d');
+  let w, h, petals = [];
+  function initCanvas() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    petals = Array.from({length:50}, () => ({
+      x: Math.random()*w, y: Math.random()*h, s: Math.random()*2+1, r: Math.random()*2
+    }));
+  }
+  function drawSakura() {
+    ctx.clearRect(0,0,w,h);
+    ctx.fillStyle = "#ffb7c5";
+    petals.forEach(p => {
+      p.y += p.s; p.x += Math.sin(p.r); p.r += 0.02;
+      if(p.y > h) p.y = -10;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill();
+    });
+    requestAnimationFrame(drawSakura);
+  }
+
+  // ── 主計時器 ──
+  function tick() {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+
+    drawDigit('h0', hh[0]); drawDigit('h1', hh[1]);
+    drawDigit('m0', mm[0]); drawDigit('m1', mm[1]);
+    drawDigit('s0', ss[0]); drawDigit('s1', ss[1]);
+
+    document.getElementById('dateLine').textContent = `${now.getFullYear()} · ${String(now.getMonth()+1).padStart(2,'0')} · ${String(now.getDate()).padStart(2,'0')}`;
+    document.getElementById('weekday').textContent = `星期${['日','一','二','三','四','五','六'][now.getDay()]}`;
+  }
+
+  // 事件監聽
+  document.getElementById('examToggle').addEventListener('change', (e) => {
+    document.getElementById('countdownArea').style.display = e.target.checked ? 'block' : 'none';
+  });
+
+  initDigits();
+  initCanvas();
+  drawSakura();
+  setInterval(tick, 1000);
+  tick();
+  window.onresize = initCanvas;
+</script>
+</body>
+</html>
